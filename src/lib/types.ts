@@ -1,3 +1,4 @@
+
 import type { Timestamp } from "firebase/firestore";
 
 export interface UserProfile {
@@ -18,9 +19,11 @@ export interface Expense {
   id: string;
   userId: string;
   roomId: string;
-  date: Timestamp;
+  date: Date;
   shop: string;
   items: string;
   cost: number;
   category: string;
+  imageUrl?: string;
+  imagePath?: string;
 }

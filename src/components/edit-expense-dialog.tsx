@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -27,12 +26,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, PlusCircle, Paperclip, XCircle } from "lucide-react";
+import { CalendarIcon, Paperclip, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
-import { addExpense } from "@/lib/firebase/firestore";
+import { updateExpense } from "@/lib/firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
+import type { Expense } from "@/lib/types";
 import Image from "next/image";
 
 const formSchema = z.object({
@@ -45,67 +45,67 @@ const formSchema = z.object({
   receipt: z.instanceof(File).optional(),
 });
 
-export function AddExpenseDialog() {
-  const [open, setOpen] = useState(false);
+interface EditExpenseDialogProps {
+  expense: Expense;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdated: () => void;
+}
+
+export function EditExpenseDialog({ expense, open, onOpenChange, onUpdated }: EditExpenseDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { userData } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(expense.imageUrl || null);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      date: new Date(),
-      shop: "",
-      items: "",
-      cost: 0,
+      date: expense.date,
+      shop: expense.shop,
+      items: expense.items,
+      cost: expense.cost,
     },
   });
-  
-  const resetForm = () => {
-    form.reset({
-      date: new Date(),
-      shop: "",
-      items: "",
-      cost: 0,
-    });
-    setPreview(null);
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
-  }
 
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        date: expense.date,
+        shop: expense.shop,
+        items: expense.items,
+        cost: expense.cost,
+      });
+      setPreview(expense.imageUrl || null);
+    }
+  }, [open, expense, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!userData || !userData.roomId) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "You must be logged in and in a room to add an expense.",
-      });
-      return;
-    }
+    if (!userData) return;
     setIsLoading(true);
+
     try {
-      await addExpense({
+      await updateExpense({
         ...values,
+        id: expense.id,
         userId: userData.userId,
-        roomId: userData.roomId,
+        imagePath: expense.imagePath,
       });
+
       toast({
-        title: "Expense Added",
-        description: "Your expense has been successfully recorded.",
+        title: "Expense Updated",
+        description: "Your expense has been successfully updated.",
       });
-      resetForm();
-      setOpen(false);
+      onUpdated();
+      onOpenChange(false);
     } catch (error: any) {
-      console.error("Error adding expense:", error);
+      console.error("Error updating expense:", error);
       toast({
         variant: "destructive",
-        title: "Error adding expense",
-        description: error.message || "There was a problem saving your expense. Please try again.",
-        duration: 10000,
+        title: "Error updating expense",
+        description: error.message || "There was a problem saving your expense.",
       });
     } finally {
       setIsLoading(false);
@@ -126,33 +126,24 @@ export function AddExpenseDialog() {
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
-  }
-  
-  const handleOpenChange = (isOpen: boolean) => {
-    if(!isOpen) {
-        resetForm();
-    }
-    setOpen(isOpen);
+    // Note: To fully remove an existing image, we would need to handle this in the submit logic
+    // For now, this just removes the newly selected image or clears the preview
+    // The backend logic needs to be aware of an intent to delete the image.
+    // This is a simplification for now.
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Expense
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Expense</DialogTitle>
+          <DialogTitle>Edit Expense</DialogTitle>
           <DialogDescription>
-            Fill in the details below. Click save when you're done.
+            Update the details below. Click save when you're done.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
+             <FormField
               control={form.control}
               name="date"
               render={({ field }) => (
@@ -246,10 +237,9 @@ export function AddExpenseDialog() {
                 )}
                 <FormMessage />
             </FormItem>
-
             <DialogFooter>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save Expense"}
+                {isLoading ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

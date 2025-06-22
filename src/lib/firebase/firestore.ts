@@ -1,7 +1,18 @@
-import { doc, setDoc, getDoc, collection, addDoc, updateDoc } from "firebase/firestore";
-import { db } from "./config";
-import type { UserProfile, Expense } from "../types";
+
+import {
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  Timestamp,
+} from "firebase/firestore";
+import { db, storage } from "./config";
+import type { UserProfile } from "../types";
 import { categorizeExpense } from "@/ai/flows/categorize-expense";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export async function addUser(user: UserProfile) {
   const userRef = doc(db, "users", user.userId);
@@ -22,6 +33,15 @@ export async function updateUserRoom(userId: string, roomId: string) {
   await updateDoc(userRef, { roomId });
 }
 
+// Helper for image uploads
+async function handleImageUpload(userId: string, receipt: File) {
+    const imagePath = `receipts/${userId}/${Date.now()}_${receipt.name}`;
+    const storageRef = ref(storage, imagePath);
+    await uploadBytes(storageRef, receipt);
+    const imageUrl = await getDownloadURL(storageRef);
+    return { imageUrl, imagePath };
+}
+
 interface AddExpenseData {
   userId: string;
   roomId: string;
@@ -29,10 +49,11 @@ interface AddExpenseData {
   items: string;
   cost: number;
   date: Date;
+  receipt?: File;
 }
 
 export async function addExpense(data: AddExpenseData) {
-  const { shop, items } = data;
+  const { shop, items, userId, receipt } = data;
   let category = "Uncategorized";
   try {
     const result = await categorizeExpense({ shopName: shop, itemDescription: items });
@@ -41,23 +62,100 @@ export async function addExpense(data: AddExpenseData) {
     }
   } catch (error: any) {
     console.error("AI categorization failed:", error);
-    // Re-throw a more specific error to be caught by the calling component
     if (error.message && error.message.includes('API key')) {
         throw new Error("AI categorization failed. Please ensure your Gemini API key is set correctly in the .env file.");
     }
      throw new Error("AI categorization failed. There might be an issue with the AI service.");
   }
   
-  const expenseData = {
-    ...data,
+  const expenseData: any = {
+    userId: data.userId,
+    roomId: data.roomId,
+    shop: data.shop,
+    items: data.items,
+    cost: data.cost,
+    date: Timestamp.fromDate(data.date),
     category: category,
   };
+
+  if (receipt) {
+    const { imageUrl, imagePath } = await handleImageUpload(userId, receipt);
+    expenseData.imageUrl = imageUrl;
+    expenseData.imagePath = imagePath;
+  }
 
   try {
     await addDoc(collection(db, "expenses"), expenseData);
   } catch(error) {
     console.error("Error writing to Firestore:", error);
-    // Re-throw a more specific error
     throw new Error("Failed to save expense. This is likely a Firestore security rule issue. Please check your rules in the Firebase console.");
+  }
+}
+
+interface UpdateExpenseData {
+    id: string;
+    userId: string;
+    date: Date;
+    shop: string;
+    items: string;
+    cost: number;
+    receipt?: File;
+    imagePath?: string;
+}
+
+export async function updateExpense(data: UpdateExpenseData) {
+    const { id, shop, items, userId, receipt, imagePath: oldImagePath } = data;
+    const expenseRef = doc(db, "expenses", id);
+    
+    let category = "Uncategorized";
+    try {
+        const result = await categorizeExpense({ shopName: shop, itemDescription: items });
+        if (result && result.category) {
+            category = result.category;
+        }
+    } catch (error) {
+        console.error("AI categorization failed:", error);
+    }
+
+    const expenseDataToUpdate: any = {
+        shop,
+        items,
+        date: Timestamp.fromDate(data.date),
+        cost: data.cost,
+        category,
+    };
+
+    if (receipt) {
+        if (oldImagePath) {
+            const oldImageRef = ref(storage, oldImagePath);
+            await deleteObject(oldImageRef).catch(err => console.error("Failed to delete old image", err));
+        }
+        const { imageUrl, imagePath } = await handleImageUpload(userId, receipt);
+        expenseDataToUpdate.imageUrl = imageUrl;
+        expenseDataToUpdate.imagePath = imagePath;
+    }
+
+    await updateDoc(expenseRef, expenseDataToUpdate);
+}
+
+export async function deleteExpense(expenseId: string, imagePath?: string) {
+  if (imagePath) {
+    const imageRef = ref(storage, imagePath);
+    try {
+      await deleteObject(imageRef);
+    } catch (error: any) {
+      console.error("Error deleting image from storage:", error);
+      if (error.code !== 'storage/object-not-found') {
+        throw new Error("Could not delete receipt image. Please try again.");
+      }
+    }
+  }
+
+  const expenseRef = doc(db, "expenses", expenseId);
+  try {
+    await deleteDoc(expenseRef);
+  } catch (error) {
+    console.error("Error deleting expense from Firestore:", error);
+    throw new Error("Failed to delete expense data. This might be a Firestore security rule issue.");
   }
 }
