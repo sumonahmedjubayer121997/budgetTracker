@@ -8,6 +8,7 @@ import {
   updateDoc,
   deleteDoc,
   Timestamp,
+  type DocumentData,
 } from "firebase/firestore";
 import { db, storage } from "./config";
 import type { UserProfile } from "../types";
@@ -23,7 +24,7 @@ export async function getUser(userId: string): Promise<UserProfile | null> {
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   if (userSnap.exists()) {
-    const data = userSnap.data()
+    const data = userSnap.data();
     return {
       userId: userSnap.id,
       ...data,
@@ -35,6 +36,25 @@ export async function getUser(userId: string): Promise<UserProfile | null> {
 export async function updateUserRoom(userId: string, roomId: string) {
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, { roomId });
+}
+
+export async function leaveRoom(userId: string) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { roomId: null });
+}
+
+export async function updateUserProfile(userId: string, data: Partial<UserProfile>) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, data as DocumentData);
+}
+
+export async function updateUserAvatar(userId: string, file: File) {
+    const imagePath = `avatars/${userId}/${file.name}`;
+    const storageRef = ref(storage, imagePath);
+    await uploadBytes(storageRef, file);
+    const avatarUrl = await getDownloadURL(storageRef);
+    await updateUserProfile(userId, { avatarUrl });
+    return avatarUrl;
 }
 
 // Helper for image uploads
@@ -90,9 +110,9 @@ export async function addExpense(data: AddExpenseData) {
 
   try {
     await addDoc(collection(db, "expenses"), expenseData);
-  } catch(error) {
+  } catch(error: any) {
     console.error("Error writing to Firestore:", error);
-    throw new Error("Failed to save expense. This is likely a Firestore security rule issue. Please check your rules in the Firebase console.");
+     throw new Error(`Failed to save expense. This is likely a Firestore security rule issue. Original error: ${error.message}`);
   }
 }
 
@@ -105,6 +125,7 @@ interface UpdateExpenseData {
     cost: number;
     receipt?: File;
     imagePath?: string;
+    imageUrl?: string;
 }
 
 export async function updateExpense(data: UpdateExpenseData) {
@@ -129,7 +150,7 @@ export async function updateExpense(data: UpdateExpenseData) {
         category,
     };
 
-    if (receipt) {
+    if (receipt) { // A new file is being uploaded
         if (oldImagePath) {
             const oldImageRef = ref(storage, oldImagePath);
             await deleteObject(oldImageRef).catch(err => console.error("Failed to delete old image", err));
@@ -137,7 +158,15 @@ export async function updateExpense(data: UpdateExpenseData) {
         const { imageUrl, imagePath } = await handleImageUpload(userId, receipt);
         expenseDataToUpdate.imageUrl = imageUrl;
         expenseDataToUpdate.imagePath = imagePath;
+    } else if (data.imageUrl === null) { // Image is being removed
+        if (oldImagePath) {
+            const oldImageRef = ref(storage, oldImagePath);
+            await deleteObject(oldImageRef).catch(err => console.error("Failed to delete old image", err));
+        }
+        expenseDataToUpdate.imageUrl = null;
+        expenseDataToUpdate.imagePath = null;
     }
+
 
     await updateDoc(expenseRef, expenseDataToUpdate);
 }
@@ -158,8 +187,8 @@ export async function deleteExpense(expenseId: string, imagePath?: string) {
   const expenseRef = doc(db, "expenses", expenseId);
   try {
     await deleteDoc(expenseRef);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting expense from Firestore:", error);
-    throw new Error("Failed to delete expense data. This might be a Firestore security rule issue.");
+    throw new Error(`Failed to delete expense data. This might be a Firestore security rule issue. Original error: ${error.message}`);
   }
 }

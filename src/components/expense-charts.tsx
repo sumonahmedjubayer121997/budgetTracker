@@ -37,7 +37,7 @@ export function ExpenseCharts({ expenses, roommates }: ExpenseChartsProps) {
     
     expenses.forEach(expense => {
       const name = roommateMap[expense.userId] || `User...${expense.userId.slice(-4)}`;
-      if (!userTotals[expense.userId]) {
+      if (!userTotals[expense.userId]) { 
         userTotals[expense.userId] = { name: name, total: 0 };
       }
       userTotals[expense.userId].total += expense.cost;

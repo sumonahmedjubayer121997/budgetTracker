@@ -43,6 +43,7 @@ const formSchema = z.object({
   items: z.string().min(3, { message: "Item description must be at least 3 characters." }),
   cost: z.coerce.number().min(0.01, { message: "Cost must be a positive number." }),
   receipt: z.instanceof(File).optional(),
+  imageUrl: z.string().nullable().optional(), // Keep track of existing or removed image
 });
 
 interface EditExpenseDialogProps {
@@ -67,6 +68,7 @@ export function EditExpenseDialog({ expense, open, onOpenChange, onUpdated }: Ed
       shop: expense.shop,
       items: expense.items,
       cost: expense.cost,
+      imageUrl: expense.imageUrl,
     },
   });
 
@@ -77,8 +79,13 @@ export function EditExpenseDialog({ expense, open, onOpenChange, onUpdated }: Ed
         shop: expense.shop,
         items: expense.items,
         cost: expense.cost,
+        imageUrl: expense.imageUrl,
+        receipt: undefined,
       });
       setPreview(expense.imageUrl || null);
+       if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   }, [open, expense, form]);
 
@@ -122,14 +129,11 @@ export function EditExpenseDialog({ expense, open, onOpenChange, onUpdated }: Ed
 
   const handleRemoveImage = () => {
     form.setValue("receipt", undefined);
+    form.setValue("imageUrl", null); // Signal that we want to remove the image
     setPreview(null);
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
-    // Note: To fully remove an existing image, we would need to handle this in the submit logic
-    // For now, this just removes the newly selected image or clears the preview
-    // The backend logic needs to be aware of an intent to delete the image.
-    // This is a simplification for now.
   }
 
   return (
@@ -248,4 +252,3 @@ export function EditExpenseDialog({ expense, open, onOpenChange, onUpdated }: Ed
     </Dialog>
   );
 }
-

@@ -7,6 +7,8 @@ export interface UserProfile {
   email: string;
   roomId: string | null;
   avatarUrl?: string;
+  monthlyBudget?: number;
+  categoryBudgets?: { [key: string]: number };
 }
 
 export interface Room {
@@ -16,7 +18,7 @@ export interface Room {
 }
 
 export interface Expense {
-  id: string;
+  id:string;
   userId: string;
   roomId: string;
   date: Date;
