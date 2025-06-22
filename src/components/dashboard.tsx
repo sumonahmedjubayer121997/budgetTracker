@@ -55,7 +55,10 @@ export default function Dashboard() {
       try {
         const usersQuery = query(collection(db, "users"), where("roomId", "==", userData.roomId));
         const querySnapshot = await getDocs(usersQuery);
-        const roommatesData = querySnapshot.docs.map(doc => doc.data() as UserProfile);
+        const roommatesData = querySnapshot.docs.map(doc => ({
+            userId: doc.id,
+            ...doc.data()
+        })) as UserProfile[];
         setRoommates(roommatesData);
       } catch (error) {
         console.error("Error fetching roommates:", error);

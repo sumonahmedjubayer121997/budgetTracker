@@ -23,7 +23,11 @@ export async function getUser(userId: string): Promise<UserProfile | null> {
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   if (userSnap.exists()) {
-    return userSnap.data() as UserProfile;
+    const data = userSnap.data()
+    return {
+      userId: userSnap.id,
+      ...data,
+    } as UserProfile;
   }
   return null;
 }
