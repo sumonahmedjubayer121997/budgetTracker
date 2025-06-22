@@ -1,0 +1,181 @@
+"use client";
+
+import React, { useState, useMemo, useEffect } from "react";
+import { type Expense, type UserProfile } from "@/lib/types";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
+import { ArrowUpDown, ListFilter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+interface ExpenseTableProps {
+  expenses: Expense[];
+  roommates: UserProfile[];
+}
+
+type SortKey = "date" | "cost" | "shop" | "user";
+type SortDirection = "asc" | "desc";
+
+export function ExpenseTable({ expenses, roommates }: ExpenseTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (roommates.length > 0) {
+        setSelectedUsers(roommates.map(r => r.uid));
+    }
+  }, [roommates]);
+
+  const roommateMap = useMemo(() => {
+    return roommates.reduce((acc, user) => {
+      acc[user.uid] = user.name;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [roommates]);
+
+  const filteredAndSortedExpenses = useMemo(() => {
+    let filtered = expenses.filter((expense) => selectedUsers.includes(expense.userId));
+
+    return filtered.sort((a, b) => {
+      let valA, valB;
+
+      switch (sortKey) {
+        case "cost":
+          valA = a.cost;
+          valB = b.cost;
+          break;
+        case "shop":
+          valA = a.shop.toLowerCase();
+          valB = b.shop.toLowerCase();
+          break;
+        case "user":
+          valA = (roommateMap[a.userId] || "").toLowerCase();
+          valB = (roommateMap[b.userId] || "").toLowerCase();
+          break;
+        default: // date
+          valA = a.date.toMillis();
+          valB = b.date.toMillis();
+      }
+
+      if (valA < valB) {
+        return sortDirection === "asc" ? -1 : 1;
+      }
+      if (valA > valB) {
+        return sortDirection === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [expenses, selectedUsers, sortKey, sortDirection, roommateMap]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection("desc");
+    }
+  };
+
+  const toggleUser = (userId: string) => {
+    setSelectedUsers(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+  
+  const totalCost = useMemo(() => {
+    return filteredAndSortedExpenses.reduce((sum, expense) => sum + expense.cost, 0);
+  }, [filteredAndSortedExpenses]);
+
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center py-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="ml-auto">
+              <ListFilter className="mr-2 h-4 w-4" /> Filter by Person
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+          {roommates.map((user) => (
+  <DropdownMenuCheckboxItem
+    key={user.uid}
+    checked={selectedUsers.includes(user.uid)} // ✅ FIXED
+    onCheckedChange={() => toggleUser(user.uid)} // ✅ FIXED
+  >
+    {user.name}
+  </DropdownMenuCheckboxItem>
+))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead onClick={() => handleSort("date")} className="cursor-pointer">
+                Date <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+              </TableHead>
+              <TableHead>Items</TableHead>
+              <TableHead onClick={() => handleSort("shop")} className="cursor-pointer">
+                Shop <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+              </TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead onClick={() => handleSort("user")} className="cursor-pointer">
+                Person <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+              </TableHead>
+              <TableHead onClick={() => handleSort("cost")} className="text-right cursor-pointer">
+                Cost <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAndSortedExpenses.length > 0 ? (
+              filteredAndSortedExpenses.map((expense) => (
+                <TableRow key={expense.id}>
+                  <TableCell className="font-medium">
+                    {format(expense.date.toDate(), "MMM d, yyyy")}
+                  </TableCell>
+                  <TableCell>{expense.items}</TableCell>
+                  <TableCell>{expense.shop}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{expense.category}</Badge>
+                  </TableCell>
+                  <TableCell>{roommateMap[expense.userId] || `User...${expense.userId.slice(-4)}`}</TableCell>
+                  <TableCell className="text-right">
+                    ${expense.cost.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center">
+                  No expenses found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+       <div className="flex items-center justify-end space-x-2 py-4">
+        <div className="flex-1 text-sm text-muted-foreground">
+          Total: ${totalCost.toFixed(2)}
+        </div>
+      </div>
+    </div>
+  );
+}
