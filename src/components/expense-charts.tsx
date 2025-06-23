@@ -27,7 +27,7 @@ const COLORS = ["#64B5F6", "#9575CD", "#4DB6AC", "#FFB74D", "#F06292", "#A1887F"
 export function ExpenseCharts({ expenses, roommates }: ExpenseChartsProps) {
   const roommateMap = useMemo(() => {
     return roommates.reduce((acc, user) => {
-      acc[user.uid] = user.name;  // 👈 Changed from user.userId to user.uid
+      acc[user.userId] = user.name;
       return acc;
     }, {} as Record<string, string>);
   }, [roommates]);

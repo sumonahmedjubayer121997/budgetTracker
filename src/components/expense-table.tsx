@@ -36,13 +36,13 @@ export function ExpenseTable({ expenses, roommates }: ExpenseTableProps) {
 
   useEffect(() => {
     if (roommates.length > 0) {
-        setSelectedUsers(roommates.map(r => r.uid));
+        setSelectedUsers(roommates.map(r => r.userId));
     }
   }, [roommates]);
 
   const roommateMap = useMemo(() => {
     return roommates.reduce((acc, user) => {
-      acc[user.uid] = user.name;
+      acc[user.userId] = user.name;
       return acc;
     }, {} as Record<string, string>);
   }, [roommates]);
@@ -113,9 +113,9 @@ export function ExpenseTable({ expenses, roommates }: ExpenseTableProps) {
           <DropdownMenuContent align="end">
           {roommates.map((user) => (
   <DropdownMenuCheckboxItem
-    key={user.uid}
-    checked={selectedUsers.includes(user.uid)} // ✅ FIXED
-    onCheckedChange={() => toggleUser(user.uid)} // ✅ FIXED
+    key={user.userId}
+    checked={selectedUsers.includes(user.userId)}
+    onCheckedChange={() => toggleUser(user.userId)}
   >
     {user.name}
   </DropdownMenuCheckboxItem>
