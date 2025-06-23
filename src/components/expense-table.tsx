@@ -50,8 +50,10 @@ export function ExpenseTable({ expenses, roommates }: ExpenseTableProps) {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   useEffect(() => {
-    if (roommates.length > 0 && selectedUsers.length === 0) {
-      setSelectedUsers(roommates.map((r) => r.userId));
+
+    if (roommates.length > 0) {
+        setSelectedUsers(roommates.map(r => r.userId));
+
     }
   }, [roommates, selectedUsers]);
 
@@ -140,15 +142,17 @@ export function ExpenseTable({ expenses, roommates }: ExpenseTableProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {roommates.map((user) => (
-              <DropdownMenuCheckboxItem
-                key={user.userId}
-                checked={selectedUsers.includes(user.userId)}
-                onCheckedChange={() => toggleUser(user.userId)}
-              >
-                {user.name}
-              </DropdownMenuCheckboxItem>
-            ))}
+
+          {roommates.map((user) => (
+  <DropdownMenuCheckboxItem
+    key={user.userId}
+    checked={selectedUsers.includes(user.userId)}
+    onCheckedChange={() => toggleUser(user.userId)}
+  >
+    {user.name}
+  </DropdownMenuCheckboxItem>
+))}
+
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
