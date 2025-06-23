@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/hooks/use-auth";
 import { type Expense, type UserProfile } from "@/lib/types";
@@ -54,7 +55,10 @@ export default function Dashboard() {
       try {
         const usersQuery = query(collection(db, "users"), where("roomId", "==", userData.roomId));
         const querySnapshot = await getDocs(usersQuery);
-        const roommatesData = querySnapshot.docs.map(doc => doc.data() as UserProfile);
+        const roommatesData = querySnapshot.docs.map(doc => ({
+            userId: doc.id,
+            ...doc.data()
+        })) as UserProfile[];
         setRoommates(roommatesData);
       } catch (error) {
         console.error("Error fetching roommates:", error);
@@ -73,10 +77,14 @@ export default function Dashboard() {
     const expensesQuery = query(collection(db, "expenses"), where("roomId", "==", userData.roomId));
     const unsubscribe = onSnapshot(expensesQuery, 
       (querySnapshot) => {
-        const expensesData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Expense[];
+        const expensesData = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                date: (data.date as Timestamp).toDate(),
+            }
+        }) as Expense[];
         setExpenses(expensesData);
         setLoadingData(false);
       },
